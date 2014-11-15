@@ -1,3 +1,19 @@
+/*
+  Standalone CAN sniffer
+  
+  An example of CAN bus sniffer for Elduino CAN128 board. The board 
+  is receiving data from the CAN bus and stores it in RAM. Stored data
+  is sent out through serial communication and displayed on the LCD.
+  Since LCD is too small to display all packets, there is a menu to
+  browse between them.
+  
+  This example requires LCD-button shield if you want to see the data
+  without computer.
+
+  created 2014
+  by Vaidas Zakarka
+*/
+
 #include <LiquidCrystal.h>
 #include "CAN.h"
 
@@ -131,17 +147,20 @@ void printIds(void){
   Serial.println(bd);
   
   Serial.println("    ID  |          DATA         |COUNT|TIME,ms|");// tLST |");
+  Serial.println("xxxxxxxx|D0 D1 D2 D3 D4 D5 D6 D7|xxxxx|xxxxxxx|");// tLST |");
   for (int i=0;i<dtaLen1;i++){
       str_len=snprintf(str,40,"%08X|",dta1[i].ID);
       Serial.print(str);
       for (int n=0;n<dta1[i].lastMSGlen;n++){
         str_len=snprintf(str,40,"%02X",dta1[i].lastData[n]);
         Serial.print(str);
-        if (n==(dta1[i].lastMSGlen-1))
-         Serial.print("|");
-        else
+        if (n!=(dta1[i].lastMSGlen-1))
          Serial.print(" ");
       }
+      for (int k=0;(k<8-dta1[i].lastMSGlen);k++)
+        Serial.print("   ");
+             //   if (n==(dta1[i].lastMSGlen-1))
+         Serial.print("|");
       str_len=snprintf(str,40,"%05d| %06d|%06d|\n\r",dta1[i].count,dta1[i].timeDelay,dta1[i].lastTime);
       str_len=snprintf(str,40,"%05d| %06d|\n\r",dta1[i].count,dta1[i].timeDelay);
         Serial.print(str);
@@ -276,6 +295,9 @@ unsigned short menu_CAN_settings(void){
 //  lcd.print(dta1[messageNo].ID,HEX);
   
 }
+
+char ReceivedByte; 
+unsigned char rsbuff[40],UART_index=0;
 void loop()
 {
   char buff[8]={1,2,3,4,5,6,7,8};
@@ -298,6 +320,73 @@ void loop()
   //show/control the menu
   menu_messages();
   
+    for (int i=0;i<UART_index;i++){
+      Serial.print((char)rsbuff[i]);
+    }
+    
+    while (Serial.available()>0){
+	ReceivedByte = Serial.read(); 
+        Serial.print((char)ReceivedByte);
+	uart_append(ReceivedByte,0);
+    }
   // wait for a second 
   delay(100);               
+}
+
+void uart_append(char byte,char buff){
+	static unsigned char n=0;
+	if ((n<40)&&(byte>=32)&&(byte<=127))
+		rsbuff[n++]=byte;  
+        if ((n==0)&&(byte==13))
+          n=UART_index;
+	if ((byte==13)&&(n>0))
+	{
+		UART_index=n;
+		receive_uart();
+                Serial.write(27);       // ESC command
+                Serial.print("[2J");    // clear screen command*/
+		n=0;
+	}
+}
+
+
+
+void receive_uart(void){
+ /* Serial.println("");
+  for (int i=0;i<UART_index;i++)
+    Serial.print((char)rsbuff[i]);
+  Serial.println("");*/
+  unsigned char st[150];
+  unsigned short id_val;
+ // unsigned short B,B1,B2;
+  unsigned char n,baitai[9],a1,a2,err=0;
+  if ((memcmp(rsbuff,"T",sizeof("T")-1)==0))
+  {
+    err=0;
+    if(sscanf((const char*)rsbuff,"T,%03x,%1d",&id_val,&n,&a2)!=2)
+      err=1;
+    if (n==0)
+      err=1;
+    for (int i=0;i<n;i++)
+    {
+      if (sscanf((const char*)&rsbuff[7+i*3],",%02x",&baitai[i])!=1)
+      {
+        err=1;
+	break;
+      }
+    }
+
+    if (err==0)
+    {
+	/*printf("TOK,%d,%d",id_val,n);
+	for (int i=0;i<n;i++)
+          printf(",%02x",baitai[i]);
+	printf("\n");*/
+        Serial.println("sent");
+	//can_tx(&baitai,n,id_val);
+        CAN.send11((char*)baitai,8,id_val);
+    }
+    else
+      Serial.println("ERR:1");
+  }
 }
