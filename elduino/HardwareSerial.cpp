@@ -86,7 +86,7 @@ struct ring_buffer
   ring_buffer rx_buffer3  =  { { 0 }, 0, 0 };
   ring_buffer tx_buffer3  =  { { 0 }, 0, 0 };
 #endif
-
+extern void usart1Rcvd(unsigned char c,unsigned char fl);
 inline void store_char(unsigned char c, ring_buffer *buffer)
 {
   int i = (unsigned int)(buffer->head + 1) % SERIAL_BUFFER_SIZE;
@@ -141,17 +141,22 @@ inline void store_char(unsigned char c, ring_buffer *buffer)
 #endif
 
 #if defined(USART1_RX_vect)
+  void usart1Rcvd(unsigned char c,unsigned char fl) __attribute__((weak));
+  void usart1Rcvd(unsigned char c,unsigned char fl){}
   void serialEvent1() __attribute__((weak));
   void serialEvent1() {}
   #define serialEvent1_implemented
   ISR(USART1_RX_vect)
   {
-    if (bit_is_clear(UCSR1A, UPE1)) {
-      unsigned char c = UDR1;
+	unsigned char  uc=UCSR1A;
+	unsigned char c = UDR1;
+	usart1Rcvd(c,uc);	   
+    if (bit_is_clear(uc, UPE1)) {
+      //unsigned char c = UDR1;
       store_char(c, &rx_buffer1);
-    } else {
-      unsigned char c = UDR1;
-    };
+    } /*else {
+      //unsigned char c = UDR1;
+    };*/
   }
 #endif
 
